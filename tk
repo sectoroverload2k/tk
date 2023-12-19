@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+
+import argparse
+import os
+import requests
+import ConfigParser
+import base64
+
+def read_config():
+    config_path = os.path.expanduser('~/.tk')
+    if not os.path.exists(config_path):
+        print('Error: Configuration file not found at ~/.tk')
+        exit(1)
+
+    config = ConfigParser.ConfigParser()
+    config.read(config_path)
+
+    configsection = 'tkonline.io'
+
+    if configsection not in config.sections() or 'api_key' not in config.options(configsection) or 'api_secret' not in config.options(configsection):
+        print('Error: API key or secret not found in the configuration file')
+        exit(1)
+
+    return config.get(configsection, 'api_key'), config.get(configsection, 'api_secret')
+
+def send_to_api(project, api_key, api_secret):
+    api_url = 'https://tkonline.io/api'
+    headers = {
+        'Authorization': 'Basic {}'.format(base64.b64encode('{}:{}'.format(api_key, api_secret)))
+        }
+    payload = {'project': project}
+
+    response = requests.post(api_url, data=payload, headers=headers)
+
+    if response.status_code == 200:
+        #print('Successfully sent project "{}" to the API.'.format(project))
+        return response.content
+    else:
+        print('Error sending project "{}" to the API. Status code: {}'.format(project, response.status_code))
+        return None
+
+def get_api_status(api_key, api_secret):
+    api_url = 'https://tkonline.io/api'
+    headers = {
+        'Authorization': 'Basic {}'.format(base64.b64encode('{}:{}'.format(api_key, api_secret)))
+    }
+    response = requests.get(api_url, headers=headers)
+
+    if response.status_code == 200:
+        #print('Successfully retrieved API status.')
+        return response.content  # Return the content of the response
+    else:
+        print('Error retrieving API status. Status code: {}'.format(response.status_code))
+        return None
+
+def main():
+    parser = argparse.ArgumentParser(description='Command line tool for making API calls to tkonline.io')
+    parser.add_argument('project', nargs='?', help='Value for the project variable')
+
+    args = parser.parse_args()
+
+    api_key, api_secret = read_config()
+
+    if args.project:
+        api_response = send_to_api(args.project, api_key, api_secret)
+    else:
+        api_response = get_api_status(api_key, api_secret)
+
+    if api_response:
+        #print('API Response: ')
+        print(api_response)
+
+if __name__ == '__main__':
+    main()
