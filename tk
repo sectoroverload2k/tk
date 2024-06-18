@@ -3,7 +3,7 @@
 import argparse
 import os
 import requests
-import ConfigParser
+import configparser
 import base64
 
 def read_config():
@@ -12,7 +12,7 @@ def read_config():
         print('Error: Configuration file not found at ~/.tk')
         exit(1)
 
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     config.read(config_path)
 
     configsection = 'tkonline.io'
@@ -25,15 +25,17 @@ def read_config():
 
 def send_to_api(project, api_key, api_secret):
     api_url = 'https://tkonline.io/api'
+    api_key_password = "%s:%s" % (api_key, api_secret)
+    b64_encoded = base64.b64encode(bytes(api_key_password, 'utf-8')).decode("ascii")
+
     headers = {
-        'Authorization': 'Basic {}'.format(base64.b64encode('{}:{}'.format(api_key, api_secret)))
+        'Authorization': 'Basic %s' % b64_encoded
         }
     payload = {'project': project}
 
     response = requests.post(api_url, data=payload, headers=headers)
 
     if response.status_code == 200:
-        #print('Successfully sent project "{}" to the API.'.format(project))
         return response.content
     else:
         print('Error sending project "{}" to the API. Status code: {}'.format(project, response.status_code))
@@ -41,13 +43,16 @@ def send_to_api(project, api_key, api_secret):
 
 def get_api_status(api_key, api_secret):
     api_url = 'https://tkonline.io/api'
+    api_key_password = "%s:%s" % (api_key, api_secret)
+    b64_encoded = base64.b64encode(bytes(api_key_password, 'utf-8')).decode("ascii")
+
     headers = {
-        'Authorization': 'Basic {}'.format(base64.b64encode('{}:{}'.format(api_key, api_secret)))
-    }
+        'Authorization': 'Basic %s' % b64_encoded
+        }
+
     response = requests.get(api_url, headers=headers)
 
     if response.status_code == 200:
-        #print('Successfully retrieved API status.')
         return response.content  # Return the content of the response
     else:
         print('Error retrieving API status. Status code: {}'.format(response.status_code))
@@ -67,8 +72,7 @@ def main():
         api_response = get_api_status(api_key, api_secret)
 
     if api_response:
-        #print('API Response: ')
-        print(api_response)
+        print(api_response.decode("ascii"))
 
 if __name__ == '__main__':
     main()
