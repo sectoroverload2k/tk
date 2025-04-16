@@ -1,69 +1,104 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
 import os
 import requests
 import configparser
 import base64
+import getpass
+from functools import lru_cache
 
+API_URL = 'https://tkonline.io/api'
+CONFIG_SECTION = 'tkonline.io'
+
+@lru_cache(maxsize=1)
 def read_config():
     config_path = os.path.expanduser('~/.tk')
     if not os.path.exists(config_path):
         print('Error: Configuration file not found at ~/.tk')
+        print('Please run "tk login" to create your configuration')
         exit(1)
 
     config = configparser.ConfigParser()
     config.read(config_path)
 
-    configsection = 'tkonline.io'
-
-    if configsection not in config.sections() or 'api_key' not in config.options(configsection) or 'api_secret' not in config.options(configsection):
+    if CONFIG_SECTION not in config.sections() or 'api_key' not in config[CONFIG_SECTION] or 'api_secret' not in config[CONFIG_SECTION]:
         print('Error: API key or secret not found in the configuration file')
         exit(1)
 
-    return config.get(configsection, 'api_key'), config.get(configsection, 'api_secret')
+    return config[CONFIG_SECTION]['api_key'], config[CONFIG_SECTION]['api_secret']
+
+def get_auth_header(api_key, api_secret):
+    auth_str = f"{api_key}:{api_secret}"
+    b64_encoded = base64.b64encode(auth_str.encode('utf-8')).decode("ascii")
+    return {'Authorization': f'Basic {b64_encoded}'}
 
 def send_to_api(project, api_key, api_secret):
-    api_url = 'https://tkonline.io/api'
-    api_key_password = "%s:%s" % (api_key, api_secret)
-    b64_encoded = base64.b64encode(bytes(api_key_password, 'utf-8')).decode("ascii")
-
-    headers = {
-        'Authorization': 'Basic %s' % b64_encoded
-        }
+    headers = get_auth_header(api_key, api_secret)
     payload = {'project': project}
 
-    response = requests.post(api_url, data=payload, headers=headers)
+    response = requests.post(API_URL, data=payload, headers=headers)
 
     if response.status_code == 200:
         return response.content
     else:
-        print('Error sending project "{}" to the API. Status code: {}'.format(project, response.status_code))
+        print(f'Error sending project "{project}" to the API. Status code: {response.status_code}')
         return None
 
 def get_api_status(api_key, api_secret):
-    api_url = 'https://tkonline.io/api'
-    api_key_password = "%s:%s" % (api_key, api_secret)
-    b64_encoded = base64.b64encode(bytes(api_key_password, 'utf-8')).decode("ascii")
-
-    headers = {
-        'Authorization': 'Basic %s' % b64_encoded
-        }
-
-    response = requests.get(api_url, headers=headers)
+    headers = get_auth_header(api_key, api_secret)
+    response = requests.get(API_URL, headers=headers)
 
     if response.status_code == 200:
-        return response.content  # Return the content of the response
+        return response.content
     else:
-        print('Error retrieving API status. Status code: {}'.format(response.status_code))
+        print(f'Error retrieving API status. Status code: {response.status_code}')
         return None
+
+def login():
+    config = configparser.ConfigParser()
+    config_path = os.path.expanduser('~/.tk')
+
+    # Check if config file exists and load it if it does
+    if os.path.exists(config_path):
+        config.read(config_path)
+
+    # Create tkonline.io section if it doesn't exist
+    if CONFIG_SECTION not in config:
+        config[CONFIG_SECTION] = {}
+
+    # Prompt for API Key and Secret
+    api_key = input("Enter your API Key: ")
+    api_secret = getpass.getpass("Enter your API Secret: ")
+
+    # Save to config
+    config[CONFIG_SECTION]['api_key'] = api_key
+    config[CONFIG_SECTION]['api_secret'] = api_secret
+
+    # Write config to file
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+    with open(config_path, 'w') as config_file:
+        config.write(config_file)
+
+    print("Login successful! Configuration saved.")
 
 def main():
     parser = argparse.ArgumentParser(description='Command line tool for making API calls to tkonline.io')
-    parser.add_argument('project', nargs='?', help='Value for the project variable')
+    subparsers = parser.add_subparsers(dest='command')
+
+    # Login command
+    login_parser = subparsers.add_parser('login', help='Configure API credentials')
+
+    # Default project command (existing functionality)
+    project_parser = parser.add_argument('project', nargs='?', help='Value for the project variable')
 
     args = parser.parse_args()
 
+    if args.command == 'login':
+        login()
+        return
+
+    # Existing functionality
     api_key, api_secret = read_config()
 
     if args.project:
